@@ -1,12 +1,52 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<web-app id="WebApp_ID" version="2.4" xmlns="http://java.sun.com/xml/ns/j2ee" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://java.sun.com/xml/ns/j2ee http://java.sun.com/xml/ns/j2ee/web-app_2_4.xsd">
+<web-app xmlns="http://java.sun.com/xml/ns/javaee"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd"
+         version="2.5">
 	<display-name>aidtracking</display-name>
-	<welcome-file-list>
-		<welcome-file>index.html</welcome-file>
-		<welcome-file>index.htm</welcome-file>
-		<welcome-file>index.jsp</welcome-file>
-		<welcome-file>default.html</welcome-file>
-		<welcome-file>default.htm</welcome-file>
-		<welcome-file>default.jsp</welcome-file>
-	</welcome-file-list>
+
+    <listener><listener-class>org.springframework.web.context.ContextLoaderListener</listener-class></listener>
+    <listener><listener-class>org.springframework.web.context.request.RequestContextListener</listener-class></listener>
+
+    <filter>
+        <filter-name>CharacterEncodingFilter</filter-name>
+        <filter-class>org.springframework.web.filter.CharacterEncodingFilter</filter-class>
+        <init-param>
+            <param-name>encoding</param-name>
+            <param-value>UTF-8</param-value>
+        </init-param>
+        <init-param>
+            <param-name>forceEncoding</param-name>
+            <param-value>true</param-value>
+        </init-param>
+    </filter>
+    <filter-mapping>
+        <filter-name>CharacterEncodingFilter</filter-name>
+        <url-pattern>/*</url-pattern>
+    </filter-mapping>
+
+
+    <!-- REST API -->
+    <servlet>
+        <servlet-name>Jersey Web Application</servlet-name>
+        <servlet-class>com.sun.jersey.spi.spring.container.servlet.SpringServlet</servlet-class>
+        <init-param>
+            <param-name>com.sun.jersey.config.property.packages</param-name>
+            <param-value>org.tokyohackerspace.aidtracking,org.codehaus.jackson.jaxrs</param-value>
+        </init-param>
+        <load-on-startup>1</load-on-startup>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>Jersey Web Application</servlet-name>
+        <url-pattern>/api/*</url-pattern>
+    </servlet-mapping>
+
+    <jsp-config>
+        <jsp-property-group>
+            <url-pattern>*.jsp</url-pattern>
+            <include-prelude>/WEB-INF/jspf/include.jspf</include-prelude>
+            <trim-directive-whitespaces>true</trim-directive-whitespaces>
+        </jsp-property-group>
+    </jsp-config>
+
 </web-app>
+	
