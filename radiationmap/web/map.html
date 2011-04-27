@@ -1,0 +1,263 @@
+<!DOCTYPE html> 
+<html xmlns="http://www.w3.org/1999/xhtml"> 
+<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.5.2/jquery.min.js"></script>
+<script type="text/javascript" src="http://maps.google.com/maps/api/js?v=3.3&&sensor=false"></script>
+<script type="text/javascript" src="extra_prototypes.js"></script>
+<script>
+var map;
+var geocoder;
+var infowindow = new google.maps.InfoWindow();
+var markers;
+var markerDatas;
+var nuclides;
+var rdtn0001Markers;
+var rdtn0008Markers;
+var flickrApiKey = '<add your own flickr api key here>'; // http://www.flickr.com/services/apps/create/apply
+
+var rdtn0001Feed = 'http://api.flickr.com/services/rest/?method=flickr.photos.search&api_key=' + flickrApiKey + '&group_id=1617552%40N25&has_geo=1&extras=date_taken&format=json&jsoncallback=?';
+var rdtn0008Feed = 'http://api.flickr.com/services/rest/?method=flickr.photos.search&api_key=' + flickrApiKey + '&user_id=61942515%40N05&has_geo=1&extras=date_taken&format=json&jsoncallback=?';
+
+var fukushimaLatLng = new google.maps.LatLng(37.461778, 141.036987);
+
+$(document).ready(function() {
+	geocoder = new google.maps.Geocoder();
+	map = new google.maps.Map(document.getElementById("map"), {
+		mapTypeId: google.maps.MapTypeId.ROADMAP,
+		zoom: 8,
+		center: fukushimaLatLng
+	});
+	var fukushimaMarker = new google.maps.Marker({map: map, icon: 'building.png', position: fukushimaLatLng});
+	var evacZone = new google.maps.Circle({map: map, strokeColor: '#f00', fillColor: 'pink', radius: 30000});	
+	evacZone.bindTo('center', fukushimaMarker, 'position');
+	google.maps.event.addListener(fukushimaMarker, 'click', function() {
+		infowindow.setContent('Fukushima Daiichi Reactor');
+		infowindow.open(map, fukushimaMarker);
+	});
+	google.maps.event.addListener(evacZone, 'click', function() {
+		infowindow.setContent('Fukushima 30km evacuation zone');
+		infowindow.open(map, fukushimaMarker);
+	});
+
+	markers = [];
+	markerDatas = [];
+	rdtn0001Markers = [];
+	rdtn0008Markers = [];
+	nuclides = {};
+
+	$('#all').click(function() {
+		$('input.cbElement,input#noRadiation').attr('checked', $(this).attr('checked'));
+		rebuildMarkers();
+	});
+
+	$('#noRadiation').click(rebuildMarkers);
+	$('#includePhotos0001').click(function() {
+		for (i in rdtn0001Markers) {
+			rdtn0001Markers[i].setMap(null);
+		}
+		rdtn0001Markers.length = 0;
+
+		if ($(this).is(':checked')) {
+			addPhotoMarkers(rdtn0001Feed, map, rdtn0001Markers, 'photo.png');
+		}
+	});
+	addPhotoMarkers(rdtn0001Feed, map, rdtn0001Markers, 'photo.png');
+
+	$('#includePhotos0008').click(function() {
+		for (i in rdtn0008Markers) {
+			rdtn0008Markers[i].setMap(null);
+		}
+		rdtn0008Markers.length = 0;
+
+		if ($(this).is(':checked')) {
+			addPhotoMarkers(rdtn0008Feed, map, rdtn0008Markers, 'star.png');
+		}
+	});
+//	addPhotoMarkers(rdtn0008Feed, map, rdtn0008Markers, 'star.png');
+
+	$.get('../Global_DIRT/spectra/index.txt', function(data) {
+		var lines = data.split('\n');
+		for (cur in lines) {
+			var fn = lines[cur].split('\t')[6];
+			if (fn) {
+				loadPointSet('../Global_DIRT/spectra/', fn, map);
+			}
+		}	
+	});
+});
+
+function loadPointSet(dir, filename, map) {
+	$.get(dir + filename, function(data) {
+		var parsed = $(data);
+		var markerData = {msg: data, dir: dir, filename: filename};
+		parsed.find('MeasuredItemInformation MeasurementLocation Coordinates').each(function(index,domEle) {
+			var coords = $(domEle).text().trim().split(' ');
+			markerData['latitude'] = parseFloat(coords[0]);
+			markerData['longitude'] = parseFloat(coords[1]);
+			markerData['time'] = new Date();
+			markerData['time'].setISO8601($(domEle).attr('Time'));
+		});
+		markerData['detected'] = [];
+		parsed.find('Measurement AnalysisResults NuclideAnalysis Nuclide').each(function(index,domEle) {
+			var level = $(domEle).find('PGT\\:DoseRate');
+			if (level.text() != '0') {
+				var nuclide = $(domEle).find('NuclideName').text();
+				markerData.detected.push({element: nuclide, level: parseFloat(level.text())});
+				if (!nuclides[nuclide]) {
+					addNuclide(nuclide);
+				}
+			}
+		});
+		if (markerData.detected.length == 0) {
+			markerData.noRadiation = true;
+		} 
+		markerDatas.push(markerData);
+		createMeasurementMarker(markerData, map);
+		$('#selectedCount').html('Displaying ' + markers.length + ' of ' + markerDatas.length  + ' readings');
+	});
+}
+
+function createMeasurementMarker(mp, map) {
+	// check for no-shows
+	var highestLevel = 0;
+	if (!($('input#noRadiation').is(':checked') && (mp.noRadiation == true))) {
+		var found = false;
+		$('form#nuclides input.cbElement:checked').each(function(index, domEle) {
+			if (found) {return;}
+			var cb = $(domEle);
+			for (i in mp.detected) {
+				if ('CB' + mp.detected[i].element == cb.attr('id')) {
+					if (mp.detected[i].level > highestLevel) {
+						highestLevel = mp.detected[i].level;
+					}
+					found = true;
+				}
+			}	
+		});
+		if (!found) {return;}
+	}
+	var point = new google.maps.LatLng(mp.latitude, mp.longitude);
+
+	var marker = new google.maps.Marker({position: point, map: map, icon: makeIcon(highestLevel)});
+	google.maps.event.addListener(marker, 'click', function() {
+		var txtElm = $('<div></div>');
+		txtElm.append($('<div class="time"></div>').text('Time: ' + mp.time));
+		var ul = $('<ul class="detectedElements"></ul>');
+		txtElm.append(ul);
+
+		for (d in mp.detected) {
+			var li = $('<li></li>');
+			li.append($('<span class="element"></span>').text(mp.detected[d].element));
+			li.append($('<span class="level"></span>').text(mp.detected[d].level + 'uSv/hr'));
+			ul.append(li);
+		}
+		ul.append('<li class="last"></li>');
+		txtElm.append($('<a class="xmlDownload"></a>').attr('href', mp.dir + mp.filename).text('Download ' + mp.filename));
+
+		geocoder.geocode({'latLng': point}, function(results, status) {
+			if (status == google.maps.GeocoderStatus.OK) {
+				txtElm.prepend($('<div class="location"></div>').text('Location: ' + results[0].formatted_address));
+			} else {
+				alert("Geocoder failed due to: " + status);
+			}
+			infowindow.setContent(txtElm.html());
+			infowindow.open(map, marker);
+		});
+	});
+	markers.push(marker);
+}
+function makeIcon(level) {
+	if (level > 1) {
+		return 'tag_red.png';
+	} else if (level > 0.5) {
+		return 'tag_orange.png';
+	} else if (level > 0.3) {
+		return 'tag_yellow.png';
+	} else if (level > 0) {
+		return 'tag_green.png';
+	} else {
+		return 'newspaper.png';
+	}
+}
+
+function rebuildMarkers() {
+	for (i in markers) {
+		markers[i].setMap(null);
+	}
+	markers.length = 0;
+
+	for (i in markerDatas) {
+		createMeasurementMarker(markerDatas[i], map);
+	}
+	$('#selectedCount').html('Displaying ' + markers.length + ' of ' + markerDatas.length  + ' readings');
+}
+function addPhotoMarkers(feedURL, map, photoMarkers, icon) {
+	$.getJSON(feedURL, 
+		function(data){
+			$.each(data.photos.photo, function(i,item){
+				var photoID = item.id; //link.split('/')[5];
+//				var photoURL = item.media.m;
+				var photoURL = 'http://farm' + item.farm + '.static.flickr.com/' + item.server + '/' + item.id + '_' + item.secret + '_m.jpg'
+				var takenDate = new Date();
+				takenDate.setISO8601(item.datetaken, true);
+
+				$.getJSON('http://api.flickr.com/services/rest/?&method=flickr.photos.geo.getLocation&api_key=' + flickrApiKey + '&photo_id=' + photoID + '&format=json&jsoncallback=?',
+					function(data){
+						if(data.stat != 'fail') {
+							var point = new google.maps.LatLng(data.photo.location.latitude, data.photo.location.longitude);
+							var marker = new google.maps.Marker({position: point, map: map, icon: icon});
+
+							google.maps.event.addListener(marker, 'click', function() {
+								var txtElm = $('<div></div>');
+								txtElm.append($('<div class="time"></div>').text('Time: ' + takenDate));
+								$("<img>").attr("src", photoURL).appendTo(txtElm).wrap("<a href='" + photoURL + "'></a>");
+
+								geocoder.geocode({'latLng': point}, function(results, status) {
+									if (status == google.maps.GeocoderStatus.OK) {
+										txtElm.prepend($('<div class="location"></div>').text('Location: ' + results[0].formatted_address));
+									} else {
+										alert("Geocoder failed due to: " + status);
+									}
+									infowindow.setContent(txtElm.html());
+									infowindow.open(map, marker);
+								});
+							});
+							photoMarkers.push(marker);
+						}
+					});
+			});
+		});
+}
+
+function addNuclide(n) {
+	nuclides[n] = 'true';
+	var cb = $('<div><input type="checkbox" id="CB' + n + '" checked="checked" class="cbElement"/><label for="CB' + n + '">' + n + '</label></div>');
+	cb.find('input').click(rebuildMarkers);
+	$('form#nuclides').prepend(cb);
+}
+</script>
+<style>
+body {font:normal x-small verdana, arial, helvetica, sans-serif;}
+#selectedCount {margin: 10px}
+form#nuclides div {float: left}
+.time {}
+a.xmlDownload {display: block}
+.markerText {margin-top: 10px; width: 400px; height: 100px; }
+ul.detectedElements {padding: 0px; margin: 0px}
+ul.detectedElements li {float: left; list-style: none; padding: 0px; margin: 0px 0px 0px 10px}
+ul.detectedElements li.last {clear: both; float: none}
+ul.detectedElements li span.element {margin-right: 10px; font-weight: bold}
+#copyrights {font-size: 9px; text-align: center}
+</style>
+<body>
+<h1>Data obtained from Global DIRT (using 3"x3" NaI SAM940 + GPS)</h1>
+<form id="nuclides">
+<div><input type="checkbox" id="noRadiation"/><label for="noRadiation">No nuclides detected</label></div>
+<br style="clear:both"/></form>
+<div><input type="checkbox" id="all" checked="checked"/><label for="all">Select/deselect all nuclides</label></div>
+<div><input type="checkbox" id="includePhotos0001" checked="checked"/><label for="includePhotos0001">Photos from RDTN.org Flickr stream</label></div>
+<div><input type="checkbox" id="includePhotos0008"/><label for="includePhotos0008">Photos from Keio Flickr stream</label></div>
+<div id="selectedCount"></div>
+<div id="map" style="height: 500px; width: 100%"></div>
+<div id="copyrights">Icons by <a href="http://www.fatcow.com/free-icons">Fat cow</a></div>
+</body>
+</html>
