@@ -1,7 +1,7 @@
 // missing prototypes to help cross browser support
 String.prototype.trim = function() {
 	return this.replace(/^\s+|\s+$/g,"");
-}
+};
 Date.prototype.setISO8601 = function (string, ignoreTZ) {
     var regexp = "([0-9]{4})(-([0-9]{2})(-([0-9]{2})" +
         "(T([0-9]{2}):([0-9]{2})(:([0-9]{2})(\.([0-9]+))?)?" +
@@ -29,5 +29,12 @@ Date.prototype.setISO8601 = function (string, ignoreTZ) {
 
     time = (Number(date) + (offset * 60 * 1000));
     this.setTime(Number(time));
-}
+};
+var arraySize = function(obj) {
+    var size = 0, key;
+    for (key in obj) {
+        if (obj.hasOwnProperty(key)) size++;
+    }
+    return size;
+};
 
