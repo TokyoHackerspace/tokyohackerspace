@@ -1,0 +1,5 @@
+Sketches to support a pair of freakduino chibis communicating the CPM data from a netrad geiger tube shield.
+
+The sensor_side contains sketches to broadcast a sensor id and count data on intervals over the freakduino's radio.
+
+The proxy_side (not implemented) is just a proxying sketch that receives the broadcast data and forwards to pachube, thingspeak, google fusion table, etc.
