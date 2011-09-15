@@ -1,0 +1,5 @@
+To deploy
+
+1) copy this folder into a web server somewhere
+2) set a flickr api key in the top (instructions in the code)
+3) put the data in the same format in the ../Global_DIRT/spectra folder relative to the "web" folder.
