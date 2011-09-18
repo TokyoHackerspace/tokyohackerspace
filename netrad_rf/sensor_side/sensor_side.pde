@@ -235,7 +235,7 @@ void cmdGetSensorID(int arg_cnt, char **args) {
 // Set sensor ID
 /**************************************************************************/
 void cmdSetSensorID(int arg_cnt, char **args) {
-  dev.sensorID = strtol(args[1], NULL, 16);
+  dev.sensorID = strtol(args[1], NULL, 10);
   eeprom_write_block(&dev.sensorID, 0, sizeof(SensorID));
   Serial.print("Sensor_ID set to ");
   Serial.println(dev.sensorID);
